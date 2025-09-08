@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Aural Melodic Dictation - Settings</title>
+  <link rel="stylesheet" href="./css/style.css" />
+</head>
+<body>
+  <header class="app-header">
+    <h1>Aural Melodic Dictation</h1>
+    <p class="subtitle">Configure your game settings</p>
+  </header>
+
+  <main class="container">
+    <form id="settings-form" class="settings-form">
+      <!-- Key Signatures -->
+      <section class="card">
+        <h2>Key Signatures</h2>
+        <p class="help">Choose one or more keys to randomly pick from per set</p>
+        <div class="grid grid-6" id="keys-container">
+          <!-- Populated by settings.js -->
+        </div>
+      </section>
+
+      <!-- Scale Degrees -->
+      <section class="card">
+        <h2>Scale Degrees</h2>
+        <p class="help">Choose the scale degrees notes can pick from</p>
+        <div class="grid grid-7" id="degrees-container">
+          <!-- Populated by settings.js -->
+        </div>
+      </section>
+
+      <!-- Tempo Options -->
+      <section class="card">
+        <h2>Tempo</h2>
+        <div class="tempo-options">
+          <label class="radio">
+            <input type="radio" name="tempoChoice" value="slow" />
+            <span>Slow (60 BPM)</span>
+          </label>
+          <label class="radio">
+            <input type="radio" name="tempoChoice" value="medium" />
+            <span>Medium (90 BPM)</span>
+          </label>
+          <label class="radio">
+            <input type="radio" name="tempoChoice" value="fast" />
+            <span>Fast (120 BPM)</span>
+          </label>
+          <label class="radio">
+            <input type="radio" name="tempoChoice" value="custom" />
+            <span>Custom</span>
+          </label>
+          <label class="inline-number">
+            <span>BPM:</span>
+            <input type="number" id="customBpm" min="30" max="240" step="1" placeholder="e.g. 100" />
+          </label>
+        </div>
+      </section>
+
+      <!-- Rhythm Values -->
+      <section class="card">
+        <h2>Rhythm Values</h2>
+        <p class="help">Choose allowed note durations (symbols shown). Values are in fractions of a whole note.</p>
+        <div class="grid grid-3" id="rhythms-container">
+          <!-- Populated by settings.js -->
+        </div>
+      </section>
+
+      <!-- Question Configuration -->
+      <section class="card">
+        <h2>Question Settings</h2>
+        <div class="form-row">
+          <label for="numNotes">Number of notes per question</label>
+          <input type="number" id="numNotes" min="1" max="64" step="1" />
+        </div>
+        <div class="form-row">
+          <label for="maxJump">Largest jump allowed (in semitones)</label>
+          <input type="number" id="maxJump" min="1" max="24" step="1" />
+        </div>
+      </section>
+
+      <!-- Mode -->
+      <section class="card">
+        <h2>Mode</h2>
+        <div class="grid grid-2">
+          <label class="checkbox">
+            <input type="checkbox" value="major" class="mode-checkbox" />
+            <span>Major</span>
+          </label>
+          <label class="checkbox">
+            <input type="checkbox" value="minor" class="mode-checkbox" />
+            <span>Minor</span>
+          </label>
+        </div>
+      </section>
+
+      <!-- Auto proceed -->
+      <section class="card">
+        <h2>Auto-Proceed</h2>
+        <label class="switch">
+          <input type="checkbox" id="autoProceed" />
+          <span class="slider"></span>
+        </label>
+        <p class="help">If on, when you finish a question, the next starts automatically.</p>
+      </section>
+
+      <div class="actions">
+        <button type="button" id="saveSettings" class="primary">Save Settings</button>
+        <a class="button" href="./game.html">Go to Game</a>
+      </div>
+    </form>
+  </main>
+
+  <footer class="app-footer">
+    <p>Built with Smplr piano samples</p>
+  </footer>
+
+  <script type="module" src="./js/settings.js"></script>
+</body>
+</html>
