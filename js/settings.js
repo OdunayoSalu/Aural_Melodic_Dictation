@@ -25,32 +25,33 @@ function populateDegrees(container, settings) {
   }
 }
 
-function noteIconSpan(id, fallback) {
+function rhythmIcon(id) {
   const span = document.createElement('span');
   span.style.display = 'inline-flex';
-  span.style.alignItems = 'center';
-  span.style.gap = '6px';
   const svgSize = 16;
   let svg = '';
   if (id === 'semibreve') {
-    // Simple open oval
     svg = `<svg width="${svgSize}" height="${svgSize}" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="12" rx="7" ry="5" fill="none" stroke="currentColor" stroke-width="2"/></svg>`;
   } else if (id === 'minim') {
-    // Open oval + stem
     svg = `<svg width="${svgSize}" height="${svgSize}" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="9" cy="15" rx="5" ry="3.6" fill="none" stroke="currentColor" stroke-width="2"/><line x1="14" y1="5" x2="14" y2="15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
-  } else {
-    span.textContent = fallback;
-    return span;
+  } else if (id === 'crotchet') {
+    svg = `<svg width="${svgSize}" height="${svgSize}" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="9" cy="15" rx="3.5" ry="2.5" fill="currentColor"/><line x1="12.5" y1="6" x2="12.5" y2="15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
+  } else if (id === 'quaver') {
+    svg = `<svg width="${svgSize}" height="${svgSize}" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="9" cy="16" rx="3.5" ry="2.5" fill="currentColor"/><path d="M13 6 V15 q4 -2 6 -1" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>`;
+  } else if (id === 'semiquaver') {
+    svg = `<svg width="${svgSize}" height="${svgSize}" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="9" cy="17" rx="3.5" ry="2.5" fill="currentColor"/><path d="M13 6 V16 q4 -2 6 -1 M13 10 q4 -2 6 -1" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>`;
   }
   span.innerHTML = svg;
-  const text = document.createElement('span');
-  text.textContent = fallback;
-  span.appendChild(text);
   return span;
 }
 
 function populateRhythms(container, settings) {
   container.innerHTML = '';
+  // Switch to flex layout to allow width equalization
+  container.classList.remove('grid', 'grid-3');
+  container.style.display = 'flex';
+  container.style.flexWrap = 'wrap';
+  container.style.gap = '10px';
   RHYTHMS.forEach((r) => {
     const id = `rh-${r.id}`;
     const input = el('input', { attrs: { type: 'checkbox', id, value: r.id } });
@@ -63,7 +64,7 @@ function populateRhythms(container, settings) {
     right.style.gap = '6px';
     const name = document.createElement('span');
     name.textContent = r.label;
-    const icon = (r.id === 'semibreve' || r.id === 'minim') ? noteIconSpan(r.id, r.symbol) : el('span', { text: r.symbol });
+    const icon = rhythmIcon(r.id);
     const frac = document.createElement('span');
     frac.style.color = '#9ca3af';
     frac.textContent = `(${r.fraction})`;
@@ -73,6 +74,24 @@ function populateRhythms(container, settings) {
     lbl.appendChild(right);
     container.appendChild(lbl);
   });
+
+  // Equalize widths to the maximum required, constrained to container width
+  queueMicrotask(() => equalizeRhythmButtonWidths());
+}
+
+function equalizeRhythmButtonWidths() {
+  const container = document.getElementById('rhythms-container');
+  if (!container) return;
+  const items = Array.from(container.querySelectorAll('label.checkbox'));
+  if (!items.length) return;
+  // Reset widths to auto for measurement
+  items.forEach(el => el.style.width = 'auto');
+  const containerWidth = container.clientWidth;
+  const maxItemWidth = Math.min(
+    containerWidth,
+    Math.max(...items.map(el => el.scrollWidth)) + 16 // slight padding buffer
+  );
+  items.forEach(el => { el.style.width = `${maxItemWidth}px`; });
 }
 
 function bindTempo(settings) {
@@ -154,6 +173,13 @@ window.addEventListener('DOMContentLoaded', () => {
   bindTempo(settings);
   bindModes(settings);
   bindNumerics(settings);
+  // Equalize rhythm button widths initially and on resize
+  equalizeRhythmButtonWidths();
+  let resizeT;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeT);
+    resizeT = setTimeout(equalizeRhythmButtonWidths, 100);
+  });
 
   document.getElementById('saveSettings').addEventListener('click', () => {
     const s = collectSettingsFromForm();
@@ -164,5 +190,6 @@ window.addEventListener('DOMContentLoaded', () => {
     }
     saveSettings(s);
     showNotice('Settings saved.');
+    equalizeRhythmButtonWidths();
   });
 });

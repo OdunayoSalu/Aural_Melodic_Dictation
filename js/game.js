@@ -1,8 +1,8 @@
 // game.js
 import { SOLFEGE, KEYS } from './constants.js';
 import { loadSettings, saveSettings, getEffectiveBpm } from './settingsStore.js';
-import { generateQuestion, formatDegreeLabel } from './musicTheory.js';
-import { initAudio, playCalibration, scheduleMelody, stopAll, suspendAudio, resumeAudio, isSuspended } from './audio.js';
+import { generateQuestion, formatDegreeLabel, degreeToMidi } from './musicTheory.js';
+import { initAudio, playCalibration, scheduleMelody, stopAll, suspendAudio, resumeAudio, isSuspended, playNoteMidi } from './audio.js';
 
 function pickRandom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
@@ -233,6 +233,12 @@ function replayCalibration() {
   playCalibration(state.questionParams.key, state.questionParams.mode, state.setParams.calibrationBpm);
 }
 
+function playTonic() {
+  if (!state.questionParams) return;
+  const tonic = degreeToMidi(state.questionParams.key, state.questionParams.mode, 1);
+  playNoteMidi(tonic, 0, 0.7, 100);
+}
+
 // Sidebar (in-game settings)
 function buildSidebarForm(container, s) {
   container.innerHTML = '';
@@ -296,25 +302,23 @@ function buildSidebarForm(container, s) {
     { id: 'quaver', label: 'Quaver', symbol: '♪', fraction: 1 / 8 },
     { id: 'semiquaver', label: 'Semiquaver', symbol: '♬', fraction: 1 / 16 },
   ];
-  const noteIconSpan = (id, fallback) => {
+  const rhythmIcon = (id) => {
     const span = document.createElement('span');
     span.style.display = 'inline-flex';
-    span.style.alignItems = 'center';
-    span.style.gap = '6px';
     const svgSize = 14;
     let svg = '';
     if (id === 'semibreve') {
       svg = `<svg width="${svgSize}" height="${svgSize}" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="12" rx="7" ry="5" fill="none" stroke="currentColor" stroke-width="2"/></svg>`;
     } else if (id === 'minim') {
       svg = `<svg width="${svgSize}" height="${svgSize}" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="9" cy="15" rx="5" ry="3.6" fill="none" stroke="currentColor" stroke-width="2"/><line x1="14" y1="5" x2="14" y2="15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
-    } else {
-      span.textContent = fallback;
-      return span;
+    } else if (id === 'crotchet') {
+      svg = `<svg width="${svgSize}" height="${svgSize}" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="9" cy="15" rx="3.5" ry="2.5" fill="currentColor"/><line x1="12.5" y1="6" x2="12.5" y2="15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
+    } else if (id === 'quaver') {
+      svg = `<svg width="${svgSize}" height="${svgSize}" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="9" cy="16" rx="3.5" ry="2.5" fill="currentColor"/><path d="M13 6 V15 q4 -2 6 -1" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>`;
+    } else if (id === 'semiquaver') {
+      svg = `<svg width="${svgSize}" height="${svgSize}" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="9" cy="17" rx="3.5" ry="2.5" fill="currentColor"/><path d="M13 6 V16 q4 -2 6 -1 M13 10 q4 -2 6 -1" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>`;
     }
     span.innerHTML = svg;
-    const text = document.createElement('span');
-    text.textContent = fallback;
-    span.appendChild(text);
     return span;
   };
   RH.forEach((r) => {
@@ -324,7 +328,7 @@ function buildSidebarForm(container, s) {
     const right = document.createElement('span');
     right.style.display = 'inline-flex'; right.style.alignItems = 'center'; right.style.gap = '6px';
     const name = document.createElement('span'); name.textContent = r.label;
-    const icon = (r.id === 'semibreve' || r.id === 'minim') ? noteIconSpan(r.id, r.symbol) : (() => { const s = document.createElement('span'); s.textContent = r.symbol; return s; })();
+    const icon = rhythmIcon(r.id);
     const frac = document.createElement('span'); frac.style.color = '#9ca3af'; frac.textContent = `(${r.fraction})`;
     right.appendChild(name); right.appendChild(icon); right.appendChild(frac);
     lbl.appendChild(right);
@@ -459,6 +463,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   qs('#btnPause').addEventListener('click', togglePause);
   qs('#btnReplayQuestion').addEventListener('click', replayQuestion);
   qs('#btnReplayCalibration').addEventListener('click', replayCalibration);
+  qs('#btnPlayTonic').addEventListener('click', playTonic);
   qs('#btnNext').addEventListener('click', nextQuestion);
   qs('#btnRestart').addEventListener('click', restartSet);
   qs('#btnStop').addEventListener('click', stopSet);
