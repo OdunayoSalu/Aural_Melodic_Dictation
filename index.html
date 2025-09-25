@@ -14,15 +14,6 @@
 
   <main class="container">
     <form id="settings-form" class="settings-form">
-      <!-- Key Signatures -->
-      <section class="card">
-        <h2>Key Signatures</h2>
-        <p class="help">Choose one or more keys to randomly pick from per set</p>
-        <div class="grid grid-6" id="keys-container">
-          <!-- Populated by settings.js -->
-        </div>
-      </section>
-
       <!-- Scale Degrees -->
       <section class="card">
         <h2>Scale Degrees</h2>
@@ -59,6 +50,16 @@
         </div>
       </section>
 
+      <!-- Calibration -->
+      <section class="card">
+        <h2>Calibration</h2>
+        <p class="help">Set the tempo for the calibration chords (I–IV–V–I). One chord per beat.</p>
+        <div class="form-row">
+          <label for="calibrationBpm">Calibration BPM</label>
+          <input type="number" id="calibrationBpm" min="20" max="300" step="1" />
+        </div>
+      </section>
+
       <!-- Rhythm Values -->
       <section class="card">
         <h2>Rhythm Values</h2>
@@ -79,6 +80,10 @@
           <label for="maxJump">Largest jump allowed (in semitones)</label>
           <input type="number" id="maxJump" min="1" max="24" step="1" />
         </div>
+        <div class="form-row">
+          <label for="questionsPerSet">Number of questions per set (0 = infinite)</label>
+          <input type="number" id="questionsPerSet" min="0" max="999" step="1" />
+        </div>
       </section>
 
       <!-- Mode -->
@@ -94,6 +99,16 @@
             <span>Minor</span>
           </label>
         </div>
+      </section>
+
+      <!-- Fixed Key -->
+      <section class="card">
+        <h2>Fixed Key</h2>
+        <p class="help">If enabled, all questions in a set use the same randomly chosen key. Calibration still plays each question.</p>
+        <label class="switch">
+          <input type="checkbox" id="fixedKey" />
+          <span class="slider"></span>
+        </label>
       </section>
 
       <!-- Auto proceed -->

@@ -1,5 +1,5 @@
 // game.js
-import { SOLFEGE } from './constants.js';
+import { SOLFEGE, KEYS } from './constants.js';
 import { loadSettings, saveSettings, getEffectiveBpm } from './settingsStore.js';
 import { generateQuestion, formatDegreeLabel } from './musicTheory.js';
 import { initAudio, playCalibration, scheduleMelody, stopAll, suspendAudio, resumeAudio, isSuspended } from './audio.js';
@@ -12,7 +12,7 @@ const qsa = (s) => Array.from(document.querySelectorAll(s));
 const state = {
   settings: null,
   inSet: false,
-  setParams: null, // { key, mode, tempoBpm }
+  setParams: null, // { tempoBpm, calibrationBpm, fixedKey, fixedKeySig }
   questionIndex: 0,
   questionsPerSet: 10,
   currentQuestion: null, // { degrees, midis, durations }
@@ -20,19 +20,40 @@ const state = {
   attemptedWrong: new Set(),
   lastSchedule: null,
   calibrationDuration: 0,
+  questionParams: null, // { key, mode } for current question
 };
 
 function chooseSetParams() {
   const s = state.settings;
-  const key = pickRandom(s.keys);
-  const mode = pickRandom(s.modes);
   const tempoBpm = getEffectiveBpm(s);
-  return { key, mode, tempoBpm };
+  const calibrationBpm = s.calibrationBpm || 90;
+  let fixedKeySig = null;
+  if (s.fixedKey) {
+    const key = pickRandom(KEYS).id;
+    const mode = pickRandom(s.modes);
+    fixedKeySig = { key, mode };
+  }
+  return { tempoBpm, calibrationBpm, fixedKey: !!s.fixedKey, fixedKeySig };
+}
+
+function chooseQuestionParams() {
+  const s = state.settings;
+  if (state.setParams.fixedKey && state.setParams.fixedKeySig) return { ...state.setParams.fixedKeySig };
+  const key = pickRandom(KEYS).id;
+  const mode = pickRandom(s.modes);
+  return { key, mode };
 }
 
 function setUpcomingParamsUI() {
-  qs('#paramKey').textContent = state.setParams.key;
-  qs('#paramMode').textContent = state.setParams.mode === 'major' ? 'Major' : 'Minor';
+  const s = state.settings;
+  if (state.setParams.fixedKey && state.setParams.fixedKeySig) {
+    qs('#paramKey').textContent = state.setParams.fixedKeySig.key;
+    qs('#paramMode').textContent = state.setParams.fixedKeySig.mode === 'major' ? 'Major' : 'Minor';
+  } else {
+    qs('#paramKey').textContent = 'Random (all keys)';
+    const modesTxt = s.modes.length > 1 ? 'Random (Major/Minor)' : (s.modes[0] === 'major' ? 'Major' : 'Minor');
+    qs('#paramMode').textContent = modesTxt;
+  }
   qs('#paramTempo').textContent = `${state.setParams.tempoBpm} BPM`;
 }
 
@@ -53,7 +74,8 @@ function initPreStart() {
 }
 
 function updateProgress() {
-  qs('#progressText').textContent = `Question ${state.questionIndex + 1} of ${state.questionsPerSet}`;
+  const totalTxt = state.questionsPerSet === 0 ? '∞' : String(state.questionsPerSet);
+  qs('#progressText').textContent = `Question ${state.questionIndex + 1} of ${totalTxt}`;
 }
 
 function buildPlaceholders(n) {
@@ -62,7 +84,7 @@ function buildPlaceholders(n) {
   for (let i = 0; i < n; i++) {
     const div = document.createElement('div');
     div.className = 'placeholder';
-    div.textContent = '？';
+    div.textContent = '?';
     cont.appendChild(div);
   }
 }
@@ -105,7 +127,7 @@ function onDegreePress(d, btnEl) {
 
     if (state.currentAnswerIndex >= state.currentQuestion.degrees.length) {
       // Completed question
-      const isLast = state.questionIndex + 1 >= state.questionsPerSet;
+      const isLast = state.questionsPerSet > 0 ? (state.questionIndex + 1 >= state.questionsPerSet) : false;
       if (isLast) {
         qs('#endOfSet').style.display = '';
       }
@@ -142,39 +164,46 @@ function startSet() {
   const deg = qs('#degreeButtons');
   if (deg) deg.style.display = '';
 
+  // Determine params for this question
+  state.questionParams = chooseQuestionParams();
   // Play calibration first, then question
-  state.calibrationDuration = playCalibration(state.setParams.key, state.setParams.mode);
+  state.calibrationDuration = playCalibration(state.questionParams.key, state.questionParams.mode, state.setParams.calibrationBpm);
 
   // Generate question and schedule to start after calibration
-  state.currentQuestion = generateQuestion(state.settings, state.setParams);
+  state.currentQuestion = generateQuestion(state.settings, { ...state.questionParams, tempoBpm: state.setParams.tempoBpm });
   state.currentAnswerIndex = 0;
   buildPlaceholders(state.currentQuestion.degrees.length);
   playCurrentQuestion(state.calibrationDuration);
 }
 
 function nextQuestion() {
-  const lastIndex = state.questionsPerSet - 1;
-  if (state.questionIndex >= lastIndex) {
-    // End of set
-    qs('#endOfSet').style.display = '';
-    return;
+  if (state.questionsPerSet > 0) {
+    const lastIndex = state.questionsPerSet - 1;
+    if (state.questionIndex >= lastIndex) {
+      // End of set
+      qs('#endOfSet').style.display = '';
+      return;
+    }
   }
   state.questionIndex++;
   updateProgress();
   qs('#endOfSet').style.display = 'none';
-  state.currentQuestion = generateQuestion(state.settings, state.setParams);
+  state.questionParams = chooseQuestionParams();
+  state.calibrationDuration = playCalibration(state.questionParams.key, state.questionParams.mode, state.setParams.calibrationBpm);
+  state.currentQuestion = generateQuestion(state.settings, { ...state.questionParams, tempoBpm: state.setParams.tempoBpm });
   state.currentAnswerIndex = 0;
   buildPlaceholders(state.currentQuestion.degrees.length);
   resetDegreeButtonsState();
-  playCurrentQuestion(0);
+  playCurrentQuestion(state.calibrationDuration);
 }
 
 function restartSet() {
   state.questionIndex = 0;
   updateProgress();
   qs('#endOfSet').style.display = 'none';
-  state.calibrationDuration = playCalibration(state.setParams.key, state.setParams.mode);
-  state.currentQuestion = generateQuestion(state.settings, state.setParams);
+  state.questionParams = chooseQuestionParams();
+  state.calibrationDuration = playCalibration(state.questionParams.key, state.questionParams.mode, state.setParams.calibrationBpm);
+  state.currentQuestion = generateQuestion(state.settings, { ...state.questionParams, tempoBpm: state.setParams.tempoBpm });
   state.currentAnswerIndex = 0;
   buildPlaceholders(state.currentQuestion.degrees.length);
   resetDegreeButtonsState();
@@ -200,7 +229,8 @@ function replayQuestion() {
 }
 
 function replayCalibration() {
-  playCalibration(state.setParams.key, state.setParams.mode);
+  if (!state.questionParams) return;
+  playCalibration(state.questionParams.key, state.questionParams.mode, state.setParams.calibrationBpm);
 }
 
 // Sidebar (in-game settings)
@@ -217,21 +247,7 @@ function buildSidebarForm(container, s) {
     return card;
   };
 
-  // Keys
-  const secKeys = section('Key Signatures');
-  const gridKeys = document.createElement('div');
-  gridKeys.className = 'grid grid-6';
-  secKeys.appendChild(gridKeys);
-  const KEYS = ["C","Db","D","Eb","E","F","Gb","G","Ab","A","Bb","B"];
-  KEYS.forEach((k) => {
-    const label = document.createElement('label');
-    label.className = 'checkbox';
-    const input = document.createElement('input');
-    input.type = 'checkbox'; input.value = k; input.checked = s.keys.includes(k);
-    label.appendChild(input);
-    const span = document.createElement('span'); span.textContent = k; label.appendChild(span);
-    gridKeys.appendChild(label);
-  });
+  // Keys removed per new logic: random per question or fixed per set.
 
   // Degrees
   const secDeg = section('Scale Degrees');
@@ -263,6 +279,13 @@ function buildSidebarForm(container, s) {
   const num = document.createElement('input'); num.type = 'number'; num.id = 'sidebarCustomBpm'; num.min = '30'; num.max = '240'; num.step = '1'; num.value = s.customBpm;
   inline.appendChild(num); tempoDiv.appendChild(inline);
 
+  // Calibration
+  const secCal = section('Calibration');
+  const rowCal = document.createElement('div'); rowCal.className = 'form-row'; secCal.appendChild(rowCal);
+  rowCal.appendChild(document.createElement('label')).textContent = 'Calibration BPM';
+  const calNum = document.createElement('input'); calNum.type = 'number'; calNum.id = 'sidebarCalibrationBpm'; calNum.min = '20'; calNum.max = '300'; calNum.step = '1'; calNum.value = s.calibrationBpm;
+  rowCal.appendChild(calNum);
+
   // Rhythms
   const secRh = section('Rhythm Values');
   const gridRh = document.createElement('div'); gridRh.className = 'grid grid-3'; secRh.appendChild(gridRh);
@@ -273,11 +296,38 @@ function buildSidebarForm(container, s) {
     { id: 'quaver', label: 'Quaver', symbol: '♪', fraction: 1 / 8 },
     { id: 'semiquaver', label: 'Semiquaver', symbol: '♬', fraction: 1 / 16 },
   ];
+  const noteIconSpan = (id, fallback) => {
+    const span = document.createElement('span');
+    span.style.display = 'inline-flex';
+    span.style.alignItems = 'center';
+    span.style.gap = '6px';
+    const svgSize = 14;
+    let svg = '';
+    if (id === 'semibreve') {
+      svg = `<svg width="${svgSize}" height="${svgSize}" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="12" rx="7" ry="5" fill="none" stroke="currentColor" stroke-width="2"/></svg>`;
+    } else if (id === 'minim') {
+      svg = `<svg width="${svgSize}" height="${svgSize}" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="9" cy="15" rx="5" ry="3.6" fill="none" stroke="currentColor" stroke-width="2"/><line x1="14" y1="5" x2="14" y2="15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
+    } else {
+      span.textContent = fallback;
+      return span;
+    }
+    span.innerHTML = svg;
+    const text = document.createElement('span');
+    text.textContent = fallback;
+    span.appendChild(text);
+    return span;
+  };
   RH.forEach((r) => {
     const lbl = document.createElement('label'); lbl.className = 'checkbox';
     const input = document.createElement('input'); input.type = 'checkbox'; input.value = r.id; input.checked = s.rhythms.includes(r.id);
     lbl.appendChild(input);
-    const span = document.createElement('span'); span.textContent = `${r.label} (${r.symbol}) — ${r.fraction}`; lbl.appendChild(span);
+    const right = document.createElement('span');
+    right.style.display = 'inline-flex'; right.style.alignItems = 'center'; right.style.gap = '6px';
+    const name = document.createElement('span'); name.textContent = r.label;
+    const icon = (r.id === 'semibreve' || r.id === 'minim') ? noteIconSpan(r.id, r.symbol) : (() => { const s = document.createElement('span'); s.textContent = r.symbol; return s; })();
+    const frac = document.createElement('span'); frac.style.color = '#9ca3af'; frac.textContent = `(${r.fraction})`;
+    right.appendChild(name); right.appendChild(icon); right.appendChild(frac);
+    lbl.appendChild(right);
     gridRh.appendChild(lbl);
   });
 
@@ -291,6 +341,10 @@ function buildSidebarForm(container, s) {
   row2.appendChild(document.createElement('label')).textContent = 'Largest jump allowed (in semitones)';
   const maxJump = document.createElement('input'); maxJump.type = 'number'; maxJump.min = '1'; maxJump.max = '24'; maxJump.step = '1'; maxJump.id = 'sidebarMaxJump'; maxJump.value = s.maxJump; row2.appendChild(maxJump);
   secQ.appendChild(row2);
+  const row3 = document.createElement('div'); row3.className = 'form-row';
+  row3.appendChild(document.createElement('label')).textContent = 'Questions per set (0 = infinite)';
+  const qps = document.createElement('input'); qps.type = 'number'; qps.id = 'sidebarQuestionsPerSet'; qps.min = '0'; qps.max = '999'; qps.step = '1'; qps.value = s.questionsPerSet; row3.appendChild(qps);
+  secQ.appendChild(row3);
 
   // Mode
   const secM = section('Mode');
@@ -303,6 +357,14 @@ function buildSidebarForm(container, s) {
     gridM.appendChild(lbl);
   });
 
+  // Fixed Key
+  const secFX = section('Fixed Key');
+  const fxHelp = document.createElement('p'); fxHelp.className = 'help'; fxHelp.textContent = 'If enabled, all questions in a set use the same randomly chosen key signature. Calibration still plays each question.'; secFX.appendChild(fxHelp);
+  const fxLbl = document.createElement('label'); fxLbl.className = 'switch';
+  const fx = document.createElement('input'); fx.type = 'checkbox'; fx.id = 'sidebarFixedKey'; fx.checked = !!s.fixedKey; fxLbl.appendChild(fx);
+  fxLbl.appendChild(document.createElement('span')).className = 'slider';
+  secFX.appendChild(fxLbl);
+
   // Auto proceed
   const secAP = section('Auto-Proceed');
   const sw = document.createElement('label'); sw.className = 'switch';
@@ -312,7 +374,6 @@ function buildSidebarForm(container, s) {
 }
 
 function collectSidebarSettings() {
-  const keys = qsa('#sidebar .grid.grid-6 input[type="checkbox"]:checked').map(i => i.value);
   const degrees = qsa('#sidebar .grid.grid-7 input[type="checkbox"]:checked').map(i => Number(i.value));
   const rhythms = qsa('#sidebar .grid.grid-3 input[type="checkbox"]:checked').map(i => i.value);
   const tempoChoice = (qs('#sidebar input[name="tempoChoice"]:checked')?.value) || 'medium';
@@ -321,18 +382,22 @@ function collectSidebarSettings() {
   const maxJump = Number(qs('#sidebarMaxJump').value) || 7;
   const modes = qsa('#sidebar .mode-checkbox:checked').map(i => i.value);
   const autoProceed = qs('#sidebarAutoProceed').checked;
-  return { keys, degrees, rhythms, tempoChoice, customBpm, numNotes, maxJump, modes, autoProceed };
+  const questionsPerSet = Number(qs('#sidebarQuestionsPerSet')?.value ?? 10);
+  const calibrationBpm = Number(qs('#sidebarCalibrationBpm')?.value ?? 90);
+  const fixedKey = !!qs('#sidebarFixedKey')?.checked;
+  return { degrees, rhythms, tempoChoice, customBpm, numNotes, maxJump, modes, autoProceed, questionsPerSet, calibrationBpm, fixedKey };
 }
 
 function validateSettings(s) {
   const errors = [];
-  if (!s.keys.length) errors.push('Select at least one key');
   if (!s.degrees.length) errors.push('Select at least one scale degree');
   if (!s.rhythms.length) errors.push('Select at least one rhythm value');
   if (!s.modes.length) errors.push('Select at least one mode');
   if (s.tempoChoice === 'custom' && (s.customBpm < 30 || s.customBpm > 240)) errors.push('Custom BPM must be between 30 and 240');
   if (s.numNotes < 1) errors.push('Number of notes must be at least 1');
   if (s.maxJump < 1) errors.push('Largest jump must be at least 1 semitone');
+  if (s.calibrationBpm < 20 || s.calibrationBpm > 300) errors.push('Calibration BPM must be between 20 and 300');
+  if (s.questionsPerSet < 0) errors.push('Questions per set cannot be negative');
   return errors;
 }
 
@@ -385,7 +450,8 @@ window.addEventListener('DOMContentLoaded', async () => {
     saveSettings(s);
     // update dependent UI
     buildDegreeButtons();
-    state.setParams.tempoBpm = getEffectiveBpm(s);
+    state.questionsPerSet = (s.questionsPerSet ?? 10);
+    state.setParams = chooseSetParams();
     setUpcomingParamsUI();
     closeSidebar();
   });

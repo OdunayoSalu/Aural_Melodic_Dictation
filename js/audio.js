@@ -86,10 +86,9 @@ export function scheduleMelody(midis, durationFractions, bpm, startOffsetSec = 0
   return { stopAll: () => stops.forEach((s) => s && s()), totalDurationSec: acc };
 }
 
-export function playCalibration(key, mode) {
-  // Each chord is a crotchet at 90bpm, one after another
-  const bpm = 90;
-  const beatSec = 60 / bpm; // crotchet length
+export function playCalibration(key, mode, bpm = 90) {
+  // Each chord is a crotchet at the provided BPM, one after another
+  const beatSec = 60 / Math.max(1, bpm); // crotchet length
   const chords = getCalibrationChords(key, mode);
   const now = getAudioContext().currentTime;
   chords.forEach((ch, i) => {

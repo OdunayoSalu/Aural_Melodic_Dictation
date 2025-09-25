@@ -51,17 +51,27 @@ a { color: var(--accent); text-decoration: none; }
 .grid { display: grid; gap: 10px; }
 .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.grid-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
-.grid-7 { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+/* Make these responsive and wrap nicely */
+.grid-6 { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
+.grid-7 { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
 
 .checkbox, .radio {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 8px;
   padding: 10px 12px;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: #0b1424;
+}
+.checkbox {
+  justify-content: center;
+  width: 100%;
+  min-height: 44px;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .checkbox input, .radio input { transform: scale(1.1); }
 
@@ -102,7 +112,7 @@ button.primary:hover, .button.primary:hover { filter: brightness(0.95); }
 .controls .danger { background: #1e0f17; border-color: #642336; color: #ffb4c2; }
 
 .question-area { min-height: 120px; display: flex; gap: 6px; align-items: center; justify-content: center; padding: 14px; border: 1px dashed var(--border); border-radius: 10px; }
-.placeholder { width: 38px; height: 38px; border-radius: 8px; background: #0b1424; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); border: 1px solid var(--border); }
+.placeholder { width: 42px; height: 42px; border-radius: 8px; background: #0b1424; display: flex; align-items: center; justify-content: center; color: var(--muted); border: 1px solid var(--border); line-height: 1; }
 .placeholder.filled { background: #132449; color: var(--text); border-color: #2a477b; }
 
 .degree-buttons { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin-top: 12px; }

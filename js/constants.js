@@ -46,6 +46,9 @@ export const DEFAULT_SETTINGS = {
   modes: ["major"], // ["major", "minor"]
   autoProceed: true,
   questionsPerSet: 10,
+  // New fields
+  fixedKey: false, // if true, all questions in a set use the same randomly chosen key signature
+  calibrationBpm: 90, // BPM for calibration chords (I–IV–V–I)
 };
 
 export const TEMPO_PRESETS = {
