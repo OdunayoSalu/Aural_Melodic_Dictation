@@ -1,5 +1,5 @@
 // game.js
-import { SOLFEGE, KEYS } from './constants.js';
+import { SOLFEGE, KEYS, MODE_INTERVALS } from './constants.js';
 import { loadSettings, saveSettings, getEffectiveBpm } from './settingsStore.js';
 import { generateQuestion, formatDegreeLabel, degreeToMidi } from './musicTheory.js';
 import { initAudio, playCalibration, scheduleMelody, stopAll, suspendAudio, resumeAudio, isSuspended, playNoteMidi } from './audio.js';
@@ -22,6 +22,19 @@ const state = {
   calibrationDuration: 0,
   questionParams: null, // { key, mode } for current question
 };
+
+// Resolve solfege names per mode
+function getSolfegeMapForMode(mode) {
+  if (mode === 'minor') {
+    return { 1: 'do', 2: 're', 3: 'me', 4: 'fa', 5: 'so', 6: 'le', 7: 'te' };
+  }
+  return SOLFEGE;
+}
+
+function currentSolfMap() {
+  const mode = state.questionParams?.mode || 'major';
+  return getSolfegeMapForMode(mode);
+}
 
 function chooseSetParams() {
   const s = state.settings;
@@ -101,11 +114,12 @@ function buildDegreeButtons() {
   const s = state.settings;
   const cont = qs('#degreeButtons');
   cont.innerHTML = '';
+  const solf = currentSolfMap();
   s.degrees.forEach((d) => {
     const btn = document.createElement('button');
     btn.className = 'degree-button';
     btn.dataset.degree = String(d);
-    btn.textContent = `${d} (${SOLFEGE[d]})`;
+    btn.textContent = `${d} (${solf[d]})`;
     btn.addEventListener('click', () => onDegreePress(d, btn));
     cont.appendChild(btn);
   });
@@ -121,7 +135,7 @@ function onDegreePress(d, btnEl) {
   const i = state.currentAnswerIndex;
   const target = state.currentQuestion.degrees[i];
   if (d === target) {
-    fillPlaceholderAt(i, formatDegreeLabel(d, SOLFEGE));
+    fillPlaceholderAt(i, formatDegreeLabel(d, currentSolfMap()));
     state.currentAnswerIndex++;
     resetDegreeButtonsState();
 
@@ -152,6 +166,138 @@ function playCurrentQuestion(fromOffset = 0) {
   state.lastSchedule = scheduleMelody(midis, durations, state.setParams.tempoBpm, fromOffset);
 }
 
+// Index of most recent unanswered (or last if all answered)
+function getLastUnansweredIndex() {
+  if (!state.currentQuestion) return 0;
+  const n = state.currentQuestion.degrees.length;
+  return state.currentAnswerIndex < n ? state.currentAnswerIndex : (n - 1);
+}
+
+// Index of most recently answered (or fallback as specified)
+function getPrevAnsweredIndex() {
+  if (!state.currentQuestion) return 0;
+  const n = state.currentQuestion.degrees.length;
+  const ca = state.currentAnswerIndex;
+  if (ca <= 0) return 0; // none answered yet -> use current unanswered
+  if (ca >= n) return n - 1; // all answered -> last note
+  return ca - 1;
+}
+
+function playLastNote() {
+  if (!state.currentQuestion || !state.inSet) return;
+  const idx = getLastUnansweredIndex();
+  const midi = state.currentQuestion.midis[idx];
+  const dur = state.currentQuestion.durations[idx] ?? 1 / 4;
+  if (state.lastSchedule && state.lastSchedule.stopAll) state.lastSchedule.stopAll();
+  state.lastSchedule = scheduleMelody([midi], [dur], state.setParams.tempoBpm, 0);
+}
+
+function playPrevNote() {
+  if (!state.currentQuestion || !state.inSet) return;
+  const idx = getPrevAnsweredIndex();
+  const midi = state.currentQuestion.midis[idx];
+  const dur = state.currentQuestion.durations[idx] ?? 1 / 4;
+  if (state.lastSchedule && state.lastSchedule.stopAll) state.lastSchedule.stopAll();
+  state.lastSchedule = scheduleMelody([midi], [dur], state.setParams.tempoBpm, 0);
+}
+
+// Build diatonic ascending step sizes for the mode (7 entries)
+function diatonicStepSizes(mode) {
+  const ints = MODE_INTERVALS[mode] || MODE_INTERVALS.major;
+  const diffs = [];
+  for (let i = 0; i < 6; i++) diffs.push(ints[i + 1] - ints[i]);
+  diffs.push(12 - (ints[6] - ints[0])); // 7 -> 1 above
+  return diffs;
+}
+
+function ascendToTonic() {
+  if (!state.currentQuestion || !state.inSet || !state.questionParams) return;
+  const { mode } = state.questionParams;
+  const idx = getLastUnansweredIndex();
+  const startMidi = state.currentQuestion.midis[idx];
+  const startDeg = state.currentQuestion.degrees[idx];
+  const startIdx = (startDeg - 1) % 7;
+  const stepsAsc = diatonicStepSizes(mode);
+
+  const stepsToTonic = 7 - startIdx; // include next tonic above
+  const midis = [startMidi];
+  let cur = startMidi;
+  let k = startIdx;
+  for (let s = 0; s < stepsToTonic; s++) {
+    const step = stepsAsc[k];
+    cur += step;
+    midis.push(cur);
+    k = (k + 1) % 7;
+  }
+  const durations = Array(midis.length).fill(1 / 4);
+  if (state.lastSchedule && state.lastSchedule.stopAll) state.lastSchedule.stopAll();
+  const bpm = state.settings?.ascendDescendBpm || 90;
+  state.lastSchedule = scheduleMelody(midis, durations, bpm, 0);
+}
+
+function descendToTonic() {
+  if (!state.currentQuestion || !state.inSet || !state.questionParams) return;
+  const { mode } = state.questionParams;
+  const idx = getLastUnansweredIndex();
+  const startMidi = state.currentQuestion.midis[idx];
+  const startDeg = state.currentQuestion.degrees[idx];
+  const startIdx = (startDeg - 1) % 7;
+  const stepsAsc = diatonicStepSizes(mode);
+
+  const stepsToPrevTonic = startIdx === 0 ? 7 : startIdx; // include previous tonic below
+  const midis = [startMidi];
+  let cur = startMidi;
+  let k = startIdx;
+  for (let s = 0; s < stepsToPrevTonic; s++) {
+    const downStep = stepsAsc[(k - 1 + 7) % 7];
+    cur -= downStep;
+    midis.push(cur);
+    k = (k - 1 + 7) % 7;
+  }
+  const durations = Array(midis.length).fill(1 / 4);
+  if (state.lastSchedule && state.lastSchedule.stopAll) state.lastSchedule.stopAll();
+  const bpm = state.settings?.ascendDescendBpm || 90;
+  state.lastSchedule = scheduleMelody(midis, durations, bpm, 0);
+}
+
+function ascendPrevToTonic() {
+  if (!state.currentQuestion || !state.inSet || !state.questionParams) return;
+  const { mode } = state.questionParams;
+  const idx = getPrevAnsweredIndex();
+  const startMidi = state.currentQuestion.midis[idx];
+  const startDeg = state.currentQuestion.degrees[idx];
+  const startIdx = (startDeg - 1) % 7;
+  const stepsAsc = diatonicStepSizes(mode);
+  const stepsToTonic = 7 - startIdx;
+  const midis = [startMidi];
+  let cur = startMidi;
+  let k = startIdx;
+  for (let s = 0; s < stepsToTonic; s++) { const step = stepsAsc[k]; cur += step; midis.push(cur); k = (k + 1) % 7; }
+  const durations = Array(midis.length).fill(1 / 4);
+  if (state.lastSchedule && state.lastSchedule.stopAll) state.lastSchedule.stopAll();
+  const bpm = state.settings?.ascendDescendBpm || 90;
+  state.lastSchedule = scheduleMelody(midis, durations, bpm, 0);
+}
+
+function descendPrevToTonic() {
+  if (!state.currentQuestion || !state.inSet || !state.questionParams) return;
+  const { mode } = state.questionParams;
+  const idx = getPrevAnsweredIndex();
+  const startMidi = state.currentQuestion.midis[idx];
+  const startDeg = state.currentQuestion.degrees[idx];
+  const startIdx = (startDeg - 1) % 7;
+  const stepsAsc = diatonicStepSizes(mode);
+  const stepsToPrevTonic = startIdx === 0 ? 7 : startIdx;
+  const midis = [startMidi];
+  let cur = startMidi;
+  let k = startIdx;
+  for (let s = 0; s < stepsToPrevTonic; s++) { const downStep = stepsAsc[(k - 1 + 7) % 7]; cur -= downStep; midis.push(cur); k = (k - 1 + 7) % 7; }
+  const durations = Array(midis.length).fill(1 / 4);
+  if (state.lastSchedule && state.lastSchedule.stopAll) state.lastSchedule.stopAll();
+  const bpm = state.settings?.ascendDescendBpm || 90;
+  state.lastSchedule = scheduleMelody(midis, durations, bpm, 0);
+}
+
 function startSet() {
   state.inSet = true;
   qs('#preStartCard').style.display = 'none';
@@ -166,6 +312,8 @@ function startSet() {
 
   // Determine params for this question
   state.questionParams = chooseQuestionParams();
+  // Update button labels for current mode
+  buildDegreeButtons();
   // Play calibration first, then question
   state.calibrationDuration = playCalibration(state.questionParams.key, state.questionParams.mode, state.setParams.calibrationBpm);
 
@@ -189,6 +337,7 @@ function nextQuestion() {
   updateProgress();
   qs('#endOfSet').style.display = 'none';
   state.questionParams = chooseQuestionParams();
+  buildDegreeButtons();
   state.calibrationDuration = playCalibration(state.questionParams.key, state.questionParams.mode, state.setParams.calibrationBpm);
   state.currentQuestion = generateQuestion(state.settings, { ...state.questionParams, tempoBpm: state.setParams.tempoBpm });
   state.currentAnswerIndex = 0;
@@ -202,6 +351,7 @@ function restartSet() {
   updateProgress();
   qs('#endOfSet').style.display = 'none';
   state.questionParams = chooseQuestionParams();
+  buildDegreeButtons();
   state.calibrationDuration = playCalibration(state.questionParams.key, state.questionParams.mode, state.setParams.calibrationBpm);
   state.currentQuestion = generateQuestion(state.settings, { ...state.questionParams, tempoBpm: state.setParams.tempoBpm });
   state.currentAnswerIndex = 0;
@@ -262,7 +412,7 @@ function buildSidebarForm(container, s) {
     const label = document.createElement('label'); label.className = 'checkbox';
     const input = document.createElement('input'); input.type = 'checkbox'; input.value = String(d); input.checked = s.degrees.includes(d);
     label.appendChild(input);
-    const span = document.createElement('span'); span.textContent = `${d} (${SOLFEGE[d]})`; label.appendChild(span);
+    const span = document.createElement('span'); span.textContent = `${d}`; label.appendChild(span);
     gridDeg.appendChild(label);
   }
 
@@ -285,12 +435,17 @@ function buildSidebarForm(container, s) {
   const num = document.createElement('input'); num.type = 'number'; num.id = 'sidebarCustomBpm'; num.min = '30'; num.max = '240'; num.step = '1'; num.value = s.customBpm;
   inline.appendChild(num); tempoDiv.appendChild(inline);
 
-  // Calibration
-  const secCal = section('Calibration');
-  const rowCal = document.createElement('div'); rowCal.className = 'form-row'; secCal.appendChild(rowCal);
-  rowCal.appendChild(document.createElement('label')).textContent = 'Calibration BPM';
+  // Tempo extras: Calibration BPM and Ascend/Descend BPM (match main settings)
+  const tempoExtra = document.createElement('div'); tempoExtra.className = 'tempo-extra'; tempoExtra.style.marginTop = '8px'; secTempo.appendChild(tempoExtra);
+  const lblCal = document.createElement('label'); lblCal.className = 'inline-number';
+  lblCal.appendChild(document.createElement('span')).textContent = 'Calibration BPM:';
   const calNum = document.createElement('input'); calNum.type = 'number'; calNum.id = 'sidebarCalibrationBpm'; calNum.min = '20'; calNum.max = '300'; calNum.step = '1'; calNum.value = s.calibrationBpm;
-  rowCal.appendChild(calNum);
+  lblCal.appendChild(calNum); tempoExtra.appendChild(lblCal);
+  const spacer = document.createElement('div'); spacer.style.marginTop = '8px'; tempoExtra.appendChild(spacer);
+  const lblAsc = document.createElement('label'); lblAsc.className = 'inline-number';
+  lblAsc.appendChild(document.createElement('span')).textContent = 'Ascend/Descend BPM:';
+  const ascNum = document.createElement('input'); ascNum.type = 'number'; ascNum.id = 'sidebarAscendDescendBpm'; ascNum.min = '20'; ascNum.max = '300'; ascNum.step = '1'; ascNum.value = s.ascendDescendBpm ?? 90;
+  lblAsc.appendChild(ascNum); tempoExtra.appendChild(lblAsc);
 
   // Rhythms
   const secRh = section('Rhythm Values');
@@ -389,7 +544,8 @@ function collectSidebarSettings() {
   const questionsPerSet = Number(qs('#sidebarQuestionsPerSet')?.value ?? 10);
   const calibrationBpm = Number(qs('#sidebarCalibrationBpm')?.value ?? 90);
   const fixedKey = !!qs('#sidebarFixedKey')?.checked;
-  return { degrees, rhythms, tempoChoice, customBpm, numNotes, maxJump, modes, autoProceed, questionsPerSet, calibrationBpm, fixedKey };
+  const ascendDescendBpm = Number(qs('#sidebarAscendDescendBpm')?.value ?? 90);
+  return { degrees, rhythms, tempoChoice, customBpm, numNotes, maxJump, modes, autoProceed, questionsPerSet, calibrationBpm, ascendDescendBpm, fixedKey };
 }
 
 function validateSettings(s) {
@@ -401,6 +557,7 @@ function validateSettings(s) {
   if (s.numNotes < 1) errors.push('Number of notes must be at least 1');
   if (s.maxJump < 1) errors.push('Largest jump must be at least 1 semitone');
   if (s.calibrationBpm < 20 || s.calibrationBpm > 300) errors.push('Calibration BPM must be between 20 and 300');
+  if (s.ascendDescendBpm != null && (s.ascendDescendBpm < 20 || s.ascendDescendBpm > 300)) errors.push('Ascend/Descend BPM must be between 20 and 300');
   if (s.questionsPerSet < 0) errors.push('Questions per set cannot be negative');
   return errors;
 }
@@ -464,6 +621,12 @@ window.addEventListener('DOMContentLoaded', async () => {
   qs('#btnReplayQuestion').addEventListener('click', replayQuestion);
   qs('#btnReplayCalibration').addEventListener('click', replayCalibration);
   qs('#btnPlayTonic').addEventListener('click', playTonic);
+  qs('#btnPlayCurrNote').addEventListener('click', playLastNote);
+  qs('#btnAscendCurrToTonic').addEventListener('click', ascendToTonic);
+  qs('#btnDescendCurrToTonic').addEventListener('click', descendToTonic);
+  qs('#btnPlayPrevNote').addEventListener('click', playPrevNote);
+  qs('#btnAscendPrevToTonic').addEventListener('click', ascendPrevToTonic);
+  qs('#btnDescendPrevToTonic').addEventListener('click', descendPrevToTonic);
   qs('#btnNext').addEventListener('click', nextQuestion);
   qs('#btnRestart').addEventListener('click', restartSet);
   qs('#btnStop').addEventListener('click', stopSet);

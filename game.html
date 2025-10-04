@@ -18,7 +18,16 @@
   </header>
 
   <main class="container two-col">
-    <!-- Left column: pre-start and in-game controls -->
+    <!-- First: question and input -->
+    <section>
+      <div class="card">
+        <h2>Question</h2>
+        <div id="placeholders" class="question-area" aria-live="polite"></div>
+        <div id="degreeButtons" class="degree-buttons"></div>
+      </div>
+    </section>
+
+    <!-- Second: pre-start and in-game controls -->
     <section>
       <div id="preStartCard" class="card parameters-card">
         <h2>Upcoming Set Parameters</h2>
@@ -39,26 +48,39 @@
           <h2>In-Game Controls</h2>
           <div id="progressText" style="color:#9ca3af">Question 1 of 10</div>
         </div>
-        <div class="controls">
-          <button id="btnPause" class="secondary">Pause</button>
-          <button id="btnReplayQuestion" class="secondary">Replay Question</button>
-          <button id="btnReplayCalibration" class="secondary">Replay Calibration</button>
-          <button id="btnPlayTonic" class="secondary">Play Tonic</button>
-          <button id="btnNext" class="secondary">Next Question</button>
-          <button id="btnRestart" class="secondary">Restart Set</button>
-          <button id="btnStop" class="danger">Stop Set</button>
-          <button id="btnOpenSettings" class="secondary">In-Game Settings</button>
+
+        <div class="controls controls-stacked">
+          <!-- Group 1 -->
+          <div class="btn-group">
+            <button id="btnReplayCalibration" class="secondary">Replay Calibration</button>
+            <button id="btnReplayQuestion" class="secondary">Replay Question</button>
+            <button id="btnPlayTonic" class="secondary">Play Tonic</button>
+          </div>
+          <!-- Group 2 -->
+          <div class="btn-group">
+            <button id="btnPlayCurrNote" class="secondary">Play Curr. Note</button>
+            <button id="btnAscendCurrToTonic" class="secondary">Ascend Curr. to Tonic</button>
+            <button id="btnDescendCurrToTonic" class="secondary">Descend Curr. to Tonic</button>
+          </div>
+          <!-- Group 3 -->
+          <div class="btn-group">
+            <button id="btnPlayPrevNote" class="secondary">Play Prev. Note</button>
+            <button id="btnAscendPrevToTonic" class="secondary">Ascend Prev. to Tonic</button>
+            <button id="btnDescendPrevToTonic" class="secondary">Descend Prev. to Tonic</button>
+          </div>
+          <!-- Group 4 -->
+          <div class="btn-group">
+            <button id="btnPause" class="secondary">Pause</button>
+            <button id="btnNext" class="secondary">Next Question</button>
+          </div>
+          <!-- Group 5 -->
+          <div class="btn-group">
+            <button id="btnStop" class="danger">Stop Set</button>
+            <button id="btnRestart" class="secondary">Restart Set</button>
+            <button id="btnOpenSettings" class="secondary">In-Game Settings</button>
+          </div>
         </div>
         <p id="endOfSet" class="help" style="display:none;margin-top:10px">Set complete. You can restart the set or return to settings.</p>
-      </div>
-    </section>
-
-    <!-- Right column: question and input -->
-    <section>
-      <div class="card">
-        <h2>Question</h2>
-        <div id="placeholders" class="question-area" aria-live="polite"></div>
-        <div id="degreeButtons" class="degree-buttons"></div>
       </div>
     </section>
   </main>

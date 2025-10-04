@@ -49,6 +49,7 @@ export const DEFAULT_SETTINGS = {
   // New fields
   fixedKey: false, // if true, all questions in a set use the same randomly chosen key signature
   calibrationBpm: 90, // BPM for calibration chords (I–IV–V–I)
+  ascendDescendBpm: 90, // BPM for ascend/descend-to-tonic scale runs
 };
 
 export const TEMPO_PRESETS = {

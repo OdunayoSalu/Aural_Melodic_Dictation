@@ -1,5 +1,5 @@
 // settings.js
-import { SOLFEGE, RHYTHMS } from './constants.js';
+import { RHYTHMS } from './constants.js';
 import { loadSettings, saveSettings } from './settingsStore.js';
 
 function el(tag, opts = {}, children = []) {
@@ -20,7 +20,7 @@ function populateDegrees(container, settings) {
     if (settings.degrees.includes(d)) input.checked = true;
     const lbl = el('label', { class: 'checkbox', attrs: { for: id } });
     lbl.appendChild(input);
-    lbl.appendChild(el('span', { text: `${d} (${SOLFEGE[d]})` }));
+    lbl.appendChild(el('span', { text: `${d}` }));
     container.appendChild(lbl);
   }
 }
@@ -122,6 +122,8 @@ function bindNumerics(settings) {
   if (qpsEl) qpsEl.value = settings.questionsPerSet;
   const calEl = document.getElementById('calibrationBpm');
   if (calEl) calEl.value = settings.calibrationBpm;
+  const adEl = document.getElementById('ascendDescendBpm');
+  if (adEl) adEl.value = settings.ascendDescendBpm ?? 90;
   const fxEl = document.getElementById('fixedKey');
   if (fxEl) fxEl.checked = !!settings.fixedKey;
 }
@@ -137,9 +139,10 @@ function collectSettingsFromForm() {
   const autoProceed = document.getElementById('autoProceed').checked;
   const questionsPerSet = Number(document.getElementById('questionsPerSet')?.value ?? 10);
   const calibrationBpm = Number(document.getElementById('calibrationBpm')?.value ?? 90);
+  const ascendDescendBpm = Number(document.getElementById('ascendDescendBpm')?.value ?? 90);
   const fixedKey = !!document.getElementById('fixedKey')?.checked;
 
-  return { degrees, rhythms, tempoChoice, customBpm, numNotes, maxJump, modes, autoProceed, questionsPerSet, calibrationBpm, fixedKey };
+  return { degrees, rhythms, tempoChoice, customBpm, numNotes, maxJump, modes, autoProceed, questionsPerSet, calibrationBpm, ascendDescendBpm, fixedKey };
 }
 
 function validateSettings(s) {
@@ -151,6 +154,7 @@ function validateSettings(s) {
   if (s.numNotes < 1) errors.push('Number of notes must be at least 1');
   if (s.maxJump < 1) errors.push('Largest jump must be at least 1 semitone');
   if (s.calibrationBpm < 20 || s.calibrationBpm > 300) errors.push('Calibration BPM must be between 20 and 300');
+  if (s.ascendDescendBpm != null && (s.ascendDescendBpm < 20 || s.ascendDescendBpm > 300)) errors.push('Ascend/Descend BPM must be between 20 and 300');
   if (s.questionsPerSet < 0) errors.push('Questions per set cannot be negative');
   return errors;
 }
